@@ -181,6 +181,7 @@ class AppPreferencesSerializer
                             .apply {
                                 enabled = false
                                 videoTunnelingEnabled = false
+                                useServerTrackSelection = false
                             }.build()
                 }.build()
 

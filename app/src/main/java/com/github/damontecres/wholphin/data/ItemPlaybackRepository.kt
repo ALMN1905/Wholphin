@@ -6,6 +6,7 @@ import com.github.damontecres.wholphin.data.model.ItemTrackModification
 import com.github.damontecres.wholphin.data.model.PlaybackLanguageChoice
 import com.github.damontecres.wholphin.data.model.TrackIndex
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.preferences.enabled
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.withContext
@@ -47,8 +48,43 @@ class ItemPlaybackRepository
                 val itemPlayback = itemPlaybackDao.getItem(user = user, itemId = itemId)
                 val plc = streamChoiceService.getPlaybackLanguageChoice(item.data)
                 Timber.v("For ${item.id}:  itemPlayback=${itemPlayback != null}, plc=${plc != null}")
-                return getChosenItemFromPlayback(item, itemPlayback, plc, prefs)
-            }
+
+                // --- SERVER-SIDE TRACK SELECTION ENFORCEMENT ---
+                var streamResult = getChosenItemFromPlayback(item, itemPlayback, plc, prefs)
+
+                val useServerSelection = prefs.appPreferences.experimentalPreferences.enabled { useServerTrackSelection }
+
+                Timber.d("SERVER_TRACK: useServerSelection=$useServerSelection, streamResult=${streamResult != null}, itemPlayback=${itemPlayback != null}")
+
+                // Only enforce server-side preferences if the user hasn't manually overridden them for this specific item
+                if (useServerSelection && streamResult != null && itemPlayback == null) {
+                    val source = streamResult.source ?: item.data.mediaSources?.firstOrNull()
+
+                    val serverAudioIndex = source?.defaultAudioStreamIndex
+                    val serverSubIndex = source?.defaultSubtitleStreamIndex
+
+                    Timber.d("SERVER_TRACK: serverAudioIndex=$serverAudioIndex, serverSubIndex=$serverSubIndex")
+
+                    // Override audio stream if the server explicitly provides a default index
+                    if (serverAudioIndex != null) {
+                        val audioFromServer = source?.mediaStreams?.firstOrNull { it.index == serverAudioIndex }
+                        if (audioFromServer != null) {
+                            streamResult = streamResult.copy(audioStream = audioFromServer)
+                        }
+                    }
+
+                    // Override subtitle stream if the server explicitly provides a default index (-1 means 'None')
+                    if (serverSubIndex != null) {
+                        val subFromServer = if (serverSubIndex == -1) null
+                                           else source?.mediaStreams?.firstOrNull { it.index == serverSubIndex }
+
+                        streamResult = streamResult.copy(subtitleStream = subFromServer)
+                    }
+                }
+                // --- END SERVER-SIDE TRACK SELECTION ENFORCEMENT ---
+
+                return@let streamResult
+        }
 
         /**
          * Get the chosen source & stream for the given item

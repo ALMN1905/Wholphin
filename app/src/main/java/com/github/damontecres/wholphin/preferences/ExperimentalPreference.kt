@@ -35,6 +35,18 @@ object ExperimentalPreference {
             summaryOn = R.string.enabled,
             summaryOff = R.string.disabled,
         )
+
+    val UseServerTrackSelection =
+        AppSwitchPreference<AppPreferences>(
+            title = R.string.use_server_track_selection,
+            defaultValue = false,
+            getter = { it.experimentalPreferences.useServerTrackSelection },
+            setter = { prefs, value ->
+                prefs.updateExperimentalPreferences { useServerTrackSelection = value }
+            },
+            summaryOn = R.string.enabled,
+            summaryOff = R.string.disabled,
+        )
 }
 
 val experimentalPreferences =
@@ -45,6 +57,7 @@ val experimentalPreferences =
                 preferences =
                     listOf(
                         ExperimentalPreference.VideoTunneling,
+                        ExperimentalPreference.UseServerTrackSelection,
                     ),
             ),
         )

@@ -41,6 +41,7 @@ import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.preferences.ShowNextUpWhen
 import com.github.damontecres.wholphin.preferences.SkipSegmentBehavior
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.preferences.enabled
 import com.github.damontecres.wholphin.services.DatePlayedService
 import com.github.damontecres.wholphin.services.DeviceProfileService
 import com.github.damontecres.wholphin.services.ImageUrlService
@@ -527,9 +528,9 @@ class PlaybackViewModel
                             plc = plc,
                             prefs = preferences,
                         )
-                val audioIndex = audioStream?.index
+                var audioIndex = audioStream?.index
 
-                val subtitleIndex =
+                var subtitleIndex =
                     streamChoiceService
                         .chooseSubtitleStream(
                             source = mediaSource,
@@ -539,6 +540,35 @@ class PlaybackViewModel
                             plc = plc,
                             prefs = preferences,
                         )?.index
+
+                // --- SERVER-SIDE TRACK SELECTION ENFORCEMENT (playback path) ---
+                // The detail-screen path (ItemPlaybackRepository.getSelectedTracks) does not
+                // feed playback: play() re-derives tracks here. Apply the same server
+                // override, under the same gate (toggle on + no local record).
+                val useServerSelection =
+                    preferences.appPreferences.experimentalPreferences.enabled { useServerTrackSelection }
+                if (useServerSelection && itemPlayback == null && !isLiveTv) {
+                    val serverAudioIndex = mediaSource.defaultAudioStreamIndex
+                    val serverSubIndex = mediaSource.defaultSubtitleStreamIndex
+                    Timber.d("SERVER_TRACK: playback path serverAudioIndex=$serverAudioIndex, serverSubIndex=$serverSubIndex")
+                    if (serverAudioIndex != null &&
+                        mediaSource.mediaStreams?.any {
+                            it.index == serverAudioIndex && it.type == MediaStreamType.AUDIO
+                        } == true
+                    ) {
+                        audioIndex = serverAudioIndex
+                    }
+                    if (serverSubIndex == -1) {
+                        subtitleIndex = null
+                    } else if (serverSubIndex != null &&
+                        mediaSource.mediaStreams?.any {
+                            it.index == serverSubIndex && it.type == MediaStreamType.SUBTITLE
+                        } == true
+                    ) {
+                        subtitleIndex = serverSubIndex
+                    }
+                }
+                // --- END SERVER-SIDE TRACK SELECTION ENFORCEMENT ---
 
                 Timber.d("Selected mediaSource=${mediaSource.id}, audioIndex=$audioIndex, subtitleIndex=$subtitleIndex")
 

@@ -89,6 +89,7 @@
     <string name="play_from_here">Play from here</string>
     <string name="play">Play</string>
     <string name="playback_debug_info">Show playback debug info</string>
+    <string name="use_server_track_selection">Respect server-side track selection</string>
     <string name="playback_speed">Playback Speed</string>
     <string name="playback">Playback</string>
     <string name="playlist">Playlist</string>
