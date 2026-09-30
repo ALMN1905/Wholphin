@@ -82,6 +82,18 @@ object ExperimentalPreference {
             },
             summary = R.string.disable_audio_offload_summary,
         )
+
+    val UseServerTrackSelection =
+        AppSwitchPreference<AppPreferences>(
+            title = R.string.use_server_track_selection,
+            defaultValue = false,
+            getter = { it.experimentalPreferences.useServerTrackSelection },
+            setter = { prefs, value ->
+                prefs.updateExperimentalPreferences { useServerTrackSelection = value }
+            },
+            summaryOn = R.string.enabled,
+            summaryOff = R.string.disabled,
+        )
 }
 
 val experimentalPreferences =
@@ -95,6 +107,7 @@ val experimentalPreferences =
                         ExperimentalPreference.PreferDolbyVisionOverHdr10Plus,
                         ExperimentalPreference.PreferAc3ForSurround,
                         ExperimentalPreference.DisableAudioOffload,
+                        ExperimentalPreference.UseServerTrackSelection,
                     ),
             ),
         )

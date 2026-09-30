@@ -529,9 +529,9 @@ class PlaybackViewModel
                                 prefs = preferences,
                             )
                     }
-                val audioIndex = audioStream?.index
+                var audioIndex = audioStream?.index
 
-                val subtitleIndex =
+                var subtitleIndex =
                     mediaSource?.let {
                         streamChoiceService
                             .chooseSubtitleStream(
@@ -543,6 +543,33 @@ class PlaybackViewModel
                                 prefs = preferences,
                             )?.index
                     }
+
+                // The server may provide per-user default track selections (set in the web UI
+                // or by a plugin). Optionally respect those instead of the client-side choices,
+                // unless the user has manually chosen tracks for this item (their choice wins).
+                val useServerSelection =
+                    preferences.appPreferences.experimentalPreferences.enabled { useServerTrackSelection }
+                if (useServerSelection && itemPlayback == null && mediaSource != null) {
+                    val serverAudioIndex = mediaSource.defaultAudioStreamIndex
+                    val serverSubIndex = mediaSource.defaultSubtitleStreamIndex
+                    if (serverAudioIndex != null &&
+                        mediaSource.mediaStreams?.any {
+                            it.index == serverAudioIndex && it.type == MediaStreamType.AUDIO
+                        } == true
+                    ) {
+                        audioIndex = serverAudioIndex
+                    }
+                    if (serverSubIndex == -1) {
+                        subtitleIndex = null
+                    } else if (serverSubIndex != null &&
+                        mediaSource.mediaStreams?.any {
+                            it.index == serverSubIndex && it.type == MediaStreamType.SUBTITLE
+                        } == true
+                    ) {
+                        subtitleIndex = serverSubIndex
+                    }
+                }
+
                 Timber.d(
                     "Selected mediaSource=%s, audioIndex=%s, subtitleIndex=%s",
                     mediaSource?.id,

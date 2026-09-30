@@ -6,6 +6,7 @@ import com.github.damontecres.wholphin.data.model.ItemTrackModification
 import com.github.damontecres.wholphin.data.model.PlaybackLanguageChoice
 import com.github.damontecres.wholphin.data.model.TrackIndex
 import com.github.damontecres.wholphin.preferences.UserPreferences
+import com.github.damontecres.wholphin.preferences.enabled
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.withContext
@@ -47,7 +48,36 @@ class ItemPlaybackRepository
                 val itemPlayback = itemPlaybackDao.getItem(user = user, itemId = itemId)
                 val plc = streamChoiceService.getPlaybackLanguageChoice(item.data)
                 Timber.v("For ${item.id}:  itemPlayback=${itemPlayback != null}, plc=${plc != null}")
-                return getChosenItemFromPlayback(item, itemPlayback, plc, prefs)
+
+                val chosen = getChosenItemFromPlayback(item, itemPlayback, plc, prefs)
+
+                // Optionally use the server's per-user default tracks, unless the user
+                // has manually chosen tracks for this item (their choice always wins).
+                // Keep in sync with the same override in PlaybackViewModel.
+                if (chosen != null &&
+                    itemPlayback == null &&
+                    prefs.appPreferences.experimentalPreferences.enabled { useServerTrackSelection }
+                ) {
+                    val source = chosen.source
+                    val serverAudioIndex = source.defaultAudioStreamIndex
+                    val serverSubIndex = source.defaultSubtitleStreamIndex
+                    // The server's indexes count every stream in the file, so the type has to be checked too
+                    val audioFromServer =
+                        source.mediaStreams?.firstOrNull {
+                            it.type == MediaStreamType.AUDIO && it.index == serverAudioIndex
+                        }
+                    val subtitleFromServer =
+                        source.mediaStreams?.firstOrNull {
+                            it.type == MediaStreamType.SUBTITLE && it.index == serverSubIndex
+                        }
+                    chosen.copy(
+                        audioStream = audioFromServer ?: chosen.audioStream,
+                        // -1 means the server selected no subtitles
+                        subtitleStream = if (serverSubIndex == -1) null else subtitleFromServer ?: chosen.subtitleStream,
+                    )
+                } else {
+                    chosen
+                }
             }
 
         /**

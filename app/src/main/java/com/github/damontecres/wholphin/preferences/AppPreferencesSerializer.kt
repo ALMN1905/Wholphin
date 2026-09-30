@@ -186,6 +186,7 @@ class AppPreferencesSerializer
                                 disableAudioOffload = ExperimentalPreference.DisableAudioOffload.defaultValue
                                 preferDolbyVisionOverHdr10Plus =
                                     ExperimentalPreference.PreferDolbyVisionOverHdr10Plus.defaultValue
+                                useServerTrackSelection = false
                             }.build()
                 }.build()
 
