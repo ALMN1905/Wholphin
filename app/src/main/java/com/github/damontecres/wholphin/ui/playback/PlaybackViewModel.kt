@@ -552,6 +552,7 @@ class PlaybackViewModel
                 if (useServerSelection && itemPlayback == null && mediaSource != null) {
                     val serverAudioIndex = mediaSource.defaultAudioStreamIndex
                     val serverSubIndex = mediaSource.defaultSubtitleStreamIndex
+                    Timber.d("SERVER_TRACK: playback path serverAudioIndex=$serverAudioIndex, serverSubIndex=$serverSubIndex")
                     if (serverAudioIndex != null &&
                         mediaSource.mediaStreams?.any {
                             it.index == serverAudioIndex && it.type == MediaStreamType.AUDIO

@@ -54,13 +54,13 @@ class ItemPlaybackRepository
                 // Optionally use the server's per-user default tracks, unless the user
                 // has manually chosen tracks for this item (their choice always wins).
                 // Keep in sync with the same override in PlaybackViewModel.
-                if (chosen != null &&
-                    itemPlayback == null &&
-                    prefs.appPreferences.experimentalPreferences.enabled { useServerTrackSelection }
-                ) {
+                val useServerSelection = prefs.appPreferences.experimentalPreferences.enabled { useServerTrackSelection }
+                Timber.d("SERVER_TRACK: useServerSelection=$useServerSelection, streamResult=${chosen != null}, itemPlayback=${itemPlayback != null}")
+                if (chosen != null && itemPlayback == null && useServerSelection) {
                     val source = chosen.source
                     val serverAudioIndex = source.defaultAudioStreamIndex
                     val serverSubIndex = source.defaultSubtitleStreamIndex
+                    Timber.d("SERVER_TRACK: serverAudioIndex=$serverAudioIndex, serverSubIndex=$serverSubIndex")
                     // The server's indexes count every stream in the file, so the type has to be checked too
                     val audioFromServer =
                         source.mediaStreams?.firstOrNull {
