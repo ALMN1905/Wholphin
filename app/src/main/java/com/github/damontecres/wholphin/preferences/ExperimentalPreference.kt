@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.preferences
 
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.ui.nav.Destination
+import com.github.damontecres.wholphin.ui.preferences.ConditionalPreferences
 import com.github.damontecres.wholphin.ui.preferences.PreferenceGroup
 import com.github.damontecres.wholphin.ui.preferences.PreferenceScreenOption
 import com.github.damontecres.wholphin.ui.preferences.PreferenceValidation
@@ -82,6 +83,27 @@ object ExperimentalPreference {
             },
             summary = R.string.disable_audio_offload_summary,
         )
+
+    val SmartLanguageEnable =
+        AppSwitchPreference<AppPreferences>(
+            title = R.string.smart_language_selection,
+            defaultValue = false,
+            getter = { it.experimentalPreferences.smartLanguageEnabled },
+            setter = { prefs, value ->
+                prefs.updateExperimentalPreferences { smartLanguageEnabled = value }
+            },
+            summary = R.string.smart_language_selection_summary,
+        )
+
+    val SmartAudioLanguages =
+        AppClickablePreference<AppPreferences>(
+            title = R.string.smart_audio_priority,
+        )
+
+    val SmartSubtitleLanguages =
+        AppClickablePreference<AppPreferences>(
+            title = R.string.smart_subtitle_priority,
+        )
 }
 
 val experimentalPreferences =
@@ -95,6 +117,23 @@ val experimentalPreferences =
                         ExperimentalPreference.PreferDolbyVisionOverHdr10Plus,
                         ExperimentalPreference.PreferAc3ForSurround,
                         ExperimentalPreference.DisableAudioOffload,
+                    ),
+            ),
+        )
+        add(
+            PreferenceGroup(
+                title = R.string.smart_language_selection,
+                preferences = listOf(ExperimentalPreference.SmartLanguageEnable),
+                conditionalPreferences =
+                    listOf(
+                        ConditionalPreferences(
+                            condition = { it.experimentalPreferences.smartLanguageEnabled },
+                            preferences =
+                                listOf(
+                                    ExperimentalPreference.SmartAudioLanguages,
+                                    ExperimentalPreference.SmartSubtitleLanguages,
+                                ),
+                        ),
                     ),
             ),
         )

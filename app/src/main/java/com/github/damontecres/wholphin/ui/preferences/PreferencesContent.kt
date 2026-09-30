@@ -60,6 +60,7 @@ import com.github.damontecres.wholphin.preferences.basicPreferences
 import com.github.damontecres.wholphin.preferences.experimentalPreferences
 import com.github.damontecres.wholphin.preferences.lazyListWrapScrolling
 import com.github.damontecres.wholphin.preferences.screensaverPreferences
+import com.github.damontecres.wholphin.preferences.updateExperimentalPreferences
 import com.github.damontecres.wholphin.preferences.updatePlaybackPreferences
 import com.github.damontecres.wholphin.services.Release
 import com.github.damontecres.wholphin.services.SeerrConnectionStatus
@@ -116,6 +117,9 @@ fun PreferencesContent(
     var seerrDialogMode by remember { mutableStateOf<SeerrDialogMode>(SeerrDialogMode.None) }
     var showQuickConnectDialog by remember { mutableStateOf(false) }
     var showLocaleChoiceDialog by remember { mutableStateOf(false) }
+    // Whether the smart language priority dialog is for audio (true) or subtitles (false), or not shown (null)
+    var smartLanguageDialog by remember { mutableStateOf<Boolean?>(null) }
+    val serverLanguages by viewModel.languages.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.preferenceDataStore.data.collect {
@@ -590,6 +594,32 @@ fun PreferencesContent(
                                     )
                                 }
 
+                                ExperimentalPreference.SmartAudioLanguages,
+                                ExperimentalPreference.SmartSubtitleLanguages,
+                                -> {
+                                    val isAudio = pref == ExperimentalPreference.SmartAudioLanguages
+                                    val codes =
+                                        preferences.experimentalPreferences.let {
+                                            if (isAudio) it.smartAudioLanguagesList else it.smartSubtitleLanguagesList
+                                        }
+                                    // Needed to show language names instead of codes
+                                    LaunchedEffect(Unit) { viewModel.loadLanguages() }
+                                    val names = remember(codes, serverLanguages) { languageNames(codes, serverLanguages) }
+                                    ClickPreference(
+                                        title = stringResource(pref.title),
+                                        onClick = { smartLanguageDialog = isAudio },
+                                        modifier = focusModifier,
+                                        summary =
+                                            if (names.isEmpty()) {
+                                                stringResource(R.string.none)
+                                            } else {
+                                                names.joinToString(", ")
+                                            },
+                                        onLongClick = {},
+                                        interactionSource = interactionSource,
+                                    )
+                                }
+
                                 ExperimentalPreference.Enable -> {
                                     var showConfirm by remember { mutableStateOf(false) }
                                     pref as AppSwitchPreference<AppPreferences>
@@ -741,6 +771,32 @@ fun PreferencesContent(
 
             SeerrDialogMode.None -> {}
         }
+    }
+
+    smartLanguageDialog?.let { isAudio ->
+        val experimental = preferences.experimentalPreferences
+        LanguagePriorityDialog(
+            title = if (isAudio) R.string.smart_audio_priority else R.string.smart_subtitle_priority,
+            selected = if (isAudio) experimental.smartAudioLanguagesList else experimental.smartSubtitleLanguagesList,
+            languages = serverLanguages,
+            onChange = { newList ->
+                scope.launch(ExceptionHandler()) {
+                    preferences =
+                        viewModel.preferenceDataStore.updateData { prefs ->
+                            prefs.updateExperimentalPreferences {
+                                if (isAudio) {
+                                    clearSmartAudioLanguages()
+                                    addAllSmartAudioLanguages(newList)
+                                } else {
+                                    clearSmartSubtitleLanguages()
+                                    addAllSmartSubtitleLanguages(newList)
+                                }
+                            }
+                        }
+                }
+            },
+            onDismissRequest = { smartLanguageDialog = null },
+        )
     }
 
     if (showQuickConnectDialog) {

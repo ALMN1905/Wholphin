@@ -103,3 +103,9 @@ This should be used sparingly.
 Some settings are considered "experimental". These may cause instabilities or may need further testing. They may be changed or removed any time.
 
 These are stored in the `ExperimentalPreferences` object in `AppPreferences`. Accessing them should always be gated with `ExperimentalPreferences.enabled`. There are a few helper functions for this purpose.
+
+##### Smart language selection
+
+An experimental alternative to the simple preferred audio & subtitle languages (`JellyfinUserPreferences`). When `ExperimentalPreferences.smart_language_enabled` is on, `StreamChoiceService` uses the ordered `smart_audio_languages` & `smart_subtitle_languages` lists via `SmartLanguageSelector` instead of the simple preferences & subtitle mode.
+
+For each subtitle language in priority order: if the media has a full (non-forced) subtitle track in it, use those subtitles (audio follows the audio priority list); else if the media has audio in it, play that audio without subtitles; else try the next language. If nothing matches, the normal selection applies. Per-item choices made in the player and series-level choices (`PlaybackLanguageChoice`) always win over it.

@@ -24,6 +24,7 @@ import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.SeerrServerRepository
 import com.github.damontecres.wholphin.services.ServerReportService
 import com.github.damontecres.wholphin.services.UpdateChecker
+import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.util.DataLoadingState
 import com.github.damontecres.wholphin.util.ExceptionHandler
@@ -36,6 +37,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.localizationApi
+import org.jellyfin.sdk.model.api.CultureDto
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -75,6 +78,26 @@ class PreferencesViewModel
         val releaseNotes = MutableStateFlow<DataLoadingState<Release>>(DataLoadingState.Pending)
 
         val externalPlayers = MutableStateFlow<List<ExternalPlayerApp>>(emptyList())
+
+        private val _languages = MutableStateFlow<List<CultureDto>>(emptyList())
+
+        /** Languages known to the server, loaded on demand by [loadLanguages] */
+        val languages: StateFlow<List<CultureDto>> = _languages
+
+        /**
+         * Fetch the languages from the server if they have not been already
+         */
+        fun loadLanguages() {
+            if (_languages.value.isEmpty()) {
+                viewModelScope.launchIO {
+                    _languages.value =
+                        api.localizationApi
+                            .getCultures()
+                            .content
+                            .filter { it.threeLetterIsoLanguageName.isNotNullOrBlank() }
+                }
+            }
+        }
 
         init {
             viewModelScope.launchIO {

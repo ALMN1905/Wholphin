@@ -5,9 +5,11 @@ import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.data.model.ItemPlayback
 import com.github.damontecres.wholphin.data.model.PlaybackLanguageChoice
 import com.github.damontecres.wholphin.data.model.TrackIndex
+import com.github.damontecres.wholphin.preferences.ExperimentalPreferences
 import com.github.damontecres.wholphin.preferences.SubtitleModePreference
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.preferences.UserProfileSettings
+import com.github.damontecres.wholphin.preferences.enabled
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -118,28 +120,57 @@ class StreamChoiceService
                 }
             return source.mediaStreams?.letNotEmpty { streams ->
                 val candidates = streams.filter { it.type == MediaStreamType.AUDIO }
-                chooseAudioStream(candidates, itemPlayback, plc, prefs)
+                val subtitleCandidates = streams.filter { it.type == MediaStreamType.SUBTITLE }
+                chooseAudioStream(candidates, itemPlayback, plc, prefs, subtitleCandidates)
             }
         }
 
         /**
+         * The experimental smart language selection settings or null if not enabled
+         */
+        private fun smartLanguages(prefs: UserPreferences): ExperimentalPreferences? =
+            prefs.appPreferences.experimentalPreferences.takeIf {
+                it.enabled { smartLanguageEnabled } &&
+                    (it.smartAudioLanguagesCount > 0 || it.smartSubtitleLanguagesCount > 0)
+            }
+
+        /**
          * Returns the audio stream that should play
+         *
+         * @param subtitleCandidates the subtitle tracks of the same media, only used by smart language selection
          */
         fun chooseAudioStream(
             candidates: List<MediaStream>,
             itemPlayback: ItemPlayback?,
             playbackLanguageChoice: PlaybackLanguageChoice?,
             prefs: UserPreferences,
+            subtitleCandidates: List<MediaStream> = emptyList(),
         ): MediaStream? =
             if (itemPlayback?.audioIndexEnabled == true) {
                 candidates.firstOrNull { it.index == itemPlayback.audioIndex }
             } else {
                 val seriesLang =
                     playbackLanguageChoice?.audioLanguage?.takeIf { it.isNotNullOrBlank() }
+                // Smart language selection overrides the simple preferred language, but not a series level choice
+                val smartAudio =
+                    if (seriesLang == null) {
+                        smartLanguages(prefs)?.let {
+                            SmartLanguageSelector.chooseAudio(
+                                audioStreams = candidates,
+                                subtitleStreams = subtitleCandidates,
+                                audioLanguages = it.smartAudioLanguagesList,
+                                subtitleLanguages = it.smartSubtitleLanguagesList,
+                            )
+                        }
+                    } else {
+                        null
+                    }
                 // If the user has chosen a different language for the series, prefer that
                 val audioLanguage =
                     seriesLang ?: getPreferredLanguage(MediaStreamType.AUDIO, prefs, userConfig)
-                if (audioLanguage.isNotNullOrBlank()) {
+                if (smartAudio != null) {
+                    smartAudio
+                } else if (audioLanguage.isNotNullOrBlank()) {
                     val sorted =
                         candidates.sortedWith(compareBy<MediaStream> { it.language }.thenByDescending { it.channels })
                     sorted.firstOrNull { it.language == audioLanguage && it.isDefault }
@@ -239,6 +270,18 @@ class StreamChoiceService
             } else if (itemPlayback?.subtitleIndexEnabled == true) {
                 return candidates.firstOrNull { it.index == itemPlayback.subtitleIndex }
             } else {
+                // Smart language selection overrides the simple preferred language & subtitle mode,
+                // but not a series level choice (including a series with subtitles turned off)
+                if (seriesLang == null && playbackLanguageChoice?.subtitlesDisabled != true) {
+                    smartLanguages(prefs)?.let {
+                        SmartLanguageSelector
+                            .chooseSubtitle(
+                                audioLanguage = audioStreamLang,
+                                subtitleStreams = candidates,
+                                subtitleLanguages = it.smartSubtitleLanguagesList,
+                            )?.let { decision -> return decision.stream }
+                    }
+                }
                 val subtitleMode =
                     when {
                         playbackLanguageChoice?.subtitlesDisabled == false && seriesLang != null -> {
@@ -337,15 +380,6 @@ class StreamChoiceService
             }
         }
 
-        /** Returns true if the track is forced (via metadata flag or title patterns). */
-        private fun isForcedOrSigns(track: MediaStream): Boolean {
-            if (track.isForced) return true
-            val title = track.title ?: track.displayTitle ?: return false
-            return title.contains("forced", ignoreCase = true) ||
-                title.contains("signs", ignoreCase = true) ||
-                title.contains("songs", ignoreCase = true)
-        }
-
         /** Finds a forced/signs track: subtitle pref -> audio -> unknown -> null. */
         private fun findForcedTrack(
             candidates: List<MediaStream>,
@@ -368,6 +402,15 @@ class StreamChoiceService
             return candidates.firstOrNull { it.language.isUnknown && isForcedOrSigns(it) }
         }
     }
+
+/** Returns true if the track is forced (via metadata flag or title patterns). */
+internal fun isForcedOrSigns(track: MediaStream): Boolean {
+    if (track.isForced) return true
+    val title = track.title ?: track.displayTitle ?: return false
+    return title.contains("forced", ignoreCase = true) ||
+        title.contains("signs", ignoreCase = true) ||
+        title.contains("songs", ignoreCase = true)
+}
 
 private val String?.isUnknown: Boolean
     get() =
